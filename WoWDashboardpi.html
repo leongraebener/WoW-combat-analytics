@@ -1,0 +1,114 @@
+<!DOCTYPE html>
+<html lang="de">
+<head>
+    <meta charset="UTF-8">
+    <title>WoW Live Analytics</title>
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <style>
+        body { font-family: 'Segoe UI', sans-serif; background: #1a1a1a; color: #f0f0f0; padding: 20px; }
+        .container { max-width: 900px; margin: auto; }
+        .chart-box { background: #2d2d2d; border-radius: 10px; padding: 15px; margin-bottom: 20px; box-shadow: 0 4px 15px rgba(0,0,0,0.5); }
+        h1 { text-align: center; color: #ffd100; text-shadow: 2px 2px #000; }
+        h2 { margin-top: 0; font-size: 1.2rem; border-bottom: 1px solid #444; padding-bottom: 5px; }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>⚔️ WoW Combat Live-Stats</h1>
+
+        <div class="chart-box">
+            <h2>Damage Per Second (DPS)</h2>
+            <canvas id="dpsChart"></canvas>
+        </div>
+
+        <div class="chart-box">
+            <h2>Heal Per Second (HPS)</h2>
+            <canvas id="hpsChart"></canvas>
+        </div>
+
+        <div id="status" style="text-align: center; color: #888;">Suche nach Kampfdaten...</div>
+    </div>
+
+    <script>
+    // Global instance for Chart.js
+    let myChart; 
+
+    // Init Chart.js context
+    const ctx = document.getElementById('dpsChart').getContext('2d');
+    myChart = new Chart(ctx, {
+        type: 'bar',
+        data: {
+            labels: [],
+            datasets: []
+        },
+        options: {
+            responsive: true,
+            scales: {
+                y: { beginAtZero: true }
+            }
+        }
+    });
+
+    // Fetch loop
+    async function updateDashboard() {
+        try {
+            const response = await fetch('http://192.168.137.16:5000/data');
+            const rawData = await response.json();
+
+            rawData.forEach(line => {
+                const parts = line.split(',');
+
+                // Filter for relevant combat events (Damage)
+                if (parts[0].includes("SPELL_DAMAGE") || parts[0].includes("SWING_DAMAGE")) {
+                    
+                    // Parse source name and damage value
+                    let name = parts[2].replace(/"/g, '');
+                    let damage = parseInt(parts[parts.length - 4]);
+
+                    if (name && !isNaN(damage)) {
+                        updateChart(name, damage);
+                    }
+                }
+            });
+        } catch (err) {
+            console.error("API Fetch Error:", err);
+        }
+    }
+
+    // Process data and update UI
+    function updateChart(name, damage) {
+        const now = new Date().toLocaleTimeString();
+
+        // Check for existing player dataset
+        let dataset = myChart.data.datasets.find(ds => ds.label === name);
+
+        if (!dataset) {
+            // Add new dataset for new player
+            const newColor = `hsl(${Math.random() * 360}, 70%, 50%)`;
+            dataset = {
+                label: name,
+                data: [],
+                borderColor: newColor,
+                backgroundColor: newColor,
+                fill: false
+            };
+            myChart.data.datasets.push(dataset);
+        }
+
+        // Buffer management (max 20 entries)
+        dataset.data.push(damage);
+        if (dataset.data.length > 20) dataset.data.shift();
+
+        if (!myChart.data.labels.includes(now)) {
+            myChart.data.labels.push(now);
+            if (myChart.data.labels.length > 20) myChart.data.labels.shift();
+        }
+
+        myChart.update('none'); 
+    }
+
+    // Main interval 2s
+    setInterval(updateDashboard, 2000);
+    </script>
+</body>
+</html>
